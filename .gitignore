@@ -105,6 +105,10 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-DAT_ASCII_EURPLN_M1_2018.csv
-DAT_ASCII_USDPLN_M1_2018.txt
-EUR_PLN_Week2.csv
+/EUR_PLN_Week2.csv
+/USDPLN_DAT.csv
+/DAT_ASCII_EURPLN_M1_2018.csv
+/basic-line.html
+/temp-plot.html
+/chart.html
+/DAT_ASCII_USDPLN_M1_2018.txt
