@@ -50,7 +50,7 @@ sourceDF = pd.read_csv(FILENAME, sep=SEPARATOR)
 sourceDF[DATE_COLUMN] = pd.to_datetime(sourceDF[DATE_COLUMN])
 sourceDF.set_index(DATE_COLUMN, inplace=True)
 
-# Reducing the time intervals to INTERVAL with averaging the values
+# Optionally reducing the time intervals to INTERVAL with averaging the values
 if INTERVAL != 'none':
     sourceDF = sourceDF.groupby(sourceDF.index.floor(INTERVAL)).mean()
 
