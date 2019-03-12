@@ -83,11 +83,11 @@ sourceDF['MACD'] = pd.Series(macd, index=sourceDF.index)
 
 # Calculating Signal
 signal = []
-for day in range(0, 9):
-    ema = macd[26]
-    signal.append(ema)
 for day in range(9, totalCount):
     ema = calculate_ema(sourceDF, 9, day, 'MACD')
+    signal.append(ema)
+for day in range(0, 9):
+    ema = signal[26]
     signal.append(ema)
 
 sourceDF['SIGNAL'] = pd.Series(signal, index=sourceDF.index)
