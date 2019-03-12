@@ -1,24 +1,8 @@
 import pandas as pd
 import plotly as py
 import plotly.graph_objs as go
+# import multiprocessing as mp
 # import timeit # timeit.default_timer()
-
-# Constants for fine tuning
-MODE = 'OFFLINE'            # 'OFFLINE' or 'ONLINE'
-MULTIPLIER = 1            # Multiplier for MACD and SIGNAL plots, for visibility reasons. Set to 1 to ignore.
-
-if MODE == 'ONLINE':
-    FILENAME = "https://raw.githubusercontent.com/plotly/datasets/master/finance-charts-apple.csv"
-    DATA_COLUMN = 'AAPL.Close'
-    DATE_COLUMN = 'Date'
-    INTERVAL = 'none'
-    SEPARATOR = ','
-else:
-    FILENAME = "DAT_ASCII_USDPLN_M1_2018.csv"
-    DATA_COLUMN = 'Bar CLOSE Bid Quote'
-    DATE_COLUMN = 'DateTime Stamp'
-    INTERVAL = '6H'  # set to 'none' to disable interval grouping and rounding of values
-    SEPARATOR = ';'
 
 
 # Function for calculating EMA_n
@@ -46,16 +30,46 @@ def calculate_ema(df, n, today, column):
     return topdiv / botdiv
 
 
+"""
+There's a little problem - the FOREX data is missing from each FRIDAY 16:59 to SUNDAY 17:00 (yeah, don't ask me)
+making it cause to miss a day if we were to pick a specific hour, like 12:00 - every SATURDAY would be missing.
+Solutions:
+- Picking 16:59 on some days and 17:00 on others
+    -- DONE by employing a tolerance selection with duplicate index removal
+- Give up trying to fetch per-day data and process the per-minute data - extreme amounts of values and processing time.
+    -- This could be minimized by multiprocessing the calculations.
+"""
+
+# Constants for fine tuning
+MULTIPLIER = 1            # Multiplier for MACD and SIGNAL plots, for visibility reasons. Set to 1 to ignore.
+FILENAME = "DAT_ASCII_USDPLN_M1_2018.csv"
+COLS = ['DateTime Stamp', 'Bar OPEN Bid Quote', 'Bar LOW Bid Quote',
+        'Bar HIGH Bid Quote', 'Bar CLOSE Bid Quote', 'Volume']
+DATA_COLUMN = 'Bar CLOSE Bid Quote'
+DATE_COLUMN = 'DateTime Stamp'
+SEPARATOR = ';'
+
 # Preparing the file
-sourceDF = pd.read_csv(FILENAME, sep=SEPARATOR)
-sourceDF[DATE_COLUMN] = pd.to_datetime(sourceDF[DATE_COLUMN])
-sourceDF.set_index(DATE_COLUMN, inplace=True)
+source_df = pd.read_csv(FILENAME, sep=SEPARATOR, names=COLS)
+# TODO: Loading of other files and appending them to source_df
+source_df[DATE_COLUMN] = pd.to_datetime(source_df[DATE_COLUMN])
+source_df.set_index(DATE_COLUMN, inplace=True)
 
-# Optionally reducing the time intervals to INTERVAL with averaging the values
-if INTERVAL != 'none':
-    sourceDF = sourceDF.groupby(sourceDF.index.floor(INTERVAL)).mean()
+# Extracting a single value from each working day
+ts = source_df.index.min().replace(hour=17, minute=00)
+final_ts = source_df.index.max().replace(hour=17, minute=00)
+delta = pd.Timedelta('1d')
+indexes = []
+while ts <= final_ts:
+    indexes.append(source_df.index.get_loc(key=ts, method="nearest"))
+    ts += delta
+indexes = source_df.index[indexes].drop_duplicates()
 
-totalCount = sourceDF.count()[DATA_COLUMN]
+formatted_df = pd.DataFrame(source_df, indexes)
+total_count = formatted_df.index.size
+
+# Cleanup
+del delta, ts, final_ts, indexes, source_df
 
 # Calculating MACD, EMA_12, EMA_26
 # MACD = EMA_12 - EMA_26
@@ -63,9 +77,10 @@ macd = [0] * 26
 ema_12 = [0] * 26
 ema_26 = [0] * 26
 
-for day in range(26, totalCount):
-    ema_12_ = calculate_ema(sourceDF, 12, day, DATA_COLUMN)
-    ema_26_ = calculate_ema(sourceDF, 26, day, DATA_COLUMN)
+# TODO: Multithread
+for day in range(26, total_count):
+    ema_12_ = calculate_ema(formatted_df, 12, day, DATA_COLUMN)
+    ema_26_ = calculate_ema(formatted_df, 26, day, DATA_COLUMN)
     macd.append(ema_12_ - ema_26_)
     ema_12.append(ema_12_)
     ema_26.append(ema_26_)
@@ -76,52 +91,51 @@ for day in range(0, 26):
     ema_12[day] = ema
     ema_26[day] = ema
 
-# Add EMA12, EMA26, MACD to sourceDF
-sourceDF['EMA_12'] = pd.Series(ema_12, index=sourceDF.index)
-sourceDF['EMA_26'] = pd.Series(ema_26, index=sourceDF.index)
-sourceDF['MACD'] = pd.Series(macd, index=sourceDF.index)
+# Add MACD to formatted_df
+formatted_df['MACD'] = pd.Series(macd, index=formatted_df.index)
 
 # Calculating Signal
-signal = []
-for day in range(9, totalCount):
-    ema = calculate_ema(sourceDF, 9, day, 'MACD')
+signal = [0] * 9
+# TODO: Multithread
+for day in range(9, total_count):
+    ema = calculate_ema(formatted_df, 9, day, 'MACD')
     signal.append(ema)
 for day in range(0, 9):
     ema = signal[26]
-    signal.append(ema)
+    signal[day] = ema
 
-sourceDF['SIGNAL'] = pd.Series(signal, index=sourceDF.index)
+# Add SIGNAL to formatted_df
+formatted_df['SIGNAL'] = pd.Series(signal, index=formatted_df.index)
 
 # And this is where we enter the plotly part.
 # Preparing and displaying the graph, MACD and SIGNAL * 100 for visibility against raw data
+# TODO: Figure out how to get buy/sell triggers and display them on the graph
 raw = go.Scatter(
-    name='RAW VALUE',
-    x=sourceDF.index,
-    y=sourceDF[DATA_COLUMN]
+    name='Kurs',
+    x=formatted_df.index,
+    y=formatted_df[DATA_COLUMN]
 )
 macd = go.Scatter(
     name='MACD',
-    x=sourceDF.index,
-    y=sourceDF['MACD'] * MULTIPLIER
+    x=formatted_df.index,
+    y=formatted_df['MACD'] * MULTIPLIER
 )
 signal = go.Scatter(
     name='SIGNAL',
-    x=sourceDF.index,
-    y=sourceDF['SIGNAL'] * MULTIPLIER
+    x=formatted_df.index,
+    y=formatted_df['SIGNAL'] * MULTIPLIER
 )
-data_raw = [raw]
-data_macd = [macd, signal]
-data_mixed = [macd, signal, raw]
+layout = dict(
+    title="Kurs dolara amerykańskiego do złotówki w latach 2015-2018",
+    xaxis=dict(type="category")
+)
+data_raw = dict(data=[raw], layout=layout)
+data_macd = dict(data=[macd, signal], layout=layout)
+data_mixed = dict(data=[macd, signal, raw], layout=layout)
 py.offline.plot(data_raw, filename='raw.html')
 py.offline.plot(data_macd, filename='macd.html')
 # py.offline.plot(data_mixed, filename='mixed.html')
 
-# 50% of the project points is all above this comment.
-
-# TODO: Figure out how to get buy/sell triggers and display them on the graph
+# 50% of the project points is above this comment.
 
 # TODO: Create a bot that will "trade" for the year using the triggers
-
-# TODO: Ustalić próbkowanie np. 12 każdego dnia
-# TODO: Dane z kilku lat żeby dostać 1000 próbek?
-
