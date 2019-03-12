@@ -4,18 +4,20 @@ import plotly.graph_objs as go
 
 # Constants for fine tuning
 MODE = 'OFFLINE'            # 'OFFLINE' or 'ONLINE'
-MULTIPLIER = 100            # Multiplier for MACD and SIGNAL plots, for visibility reasons. Set to 1 to ignore.
+MULTIPLIER = 1            # Multiplier for MACD and SIGNAL plots, for visibility reasons. Set to 1 to ignore.
 
 if MODE == 'ONLINE':
     FILENAME = "https://raw.githubusercontent.com/plotly/datasets/master/finance-charts-apple.csv"
     DATA_COLUMN = 'AAPL.Close'
     DATE_COLUMN = 'Date'
     INTERVAL = 'none'
+    SEPARATOR = ','
 else:
     FILENAME = "DAT_ASCII_USDPLN_M1_2018.csv"
     DATA_COLUMN = 'Bar CLOSE Bid Quote'
     DATE_COLUMN = 'DateTime Stamp'
     INTERVAL = '6H'  # set to 'none' to disable interval grouping and rounding of values
+    SEPARATOR = ';'
 
 
 # Function for calculating EMA_n
@@ -44,7 +46,7 @@ def calculate_ema(df, n, today, column):
 
 
 # Preparing the file
-sourceDF = pd.read_csv(FILENAME, sep=';')
+sourceDF = pd.read_csv(FILENAME, sep=SEPARATOR)
 sourceDF[DATE_COLUMN] = pd.to_datetime(sourceDF[DATE_COLUMN])
 sourceDF.set_index(DATE_COLUMN, inplace=True)
 
@@ -56,21 +58,9 @@ totalCount = sourceDF.count()[DATA_COLUMN]
 
 # Calculating MACD, EMA_12, EMA_26
 # MACD = EMA_12 - EMA_26
-macd = []
-ema_12 = []
-ema_26 = []
-for day in range(0, 12):
-    ema = calculate_ema(sourceDF, day, day, DATA_COLUMN)
-    macd.append(ema)
-    ema_12.append(ema)
-    ema_26.append(ema)
-
-for day in range(12, 26):
-    ema_12_ = calculate_ema(sourceDF, 12, day, DATA_COLUMN)
-    ema_26_ = calculate_ema(sourceDF, day, day, DATA_COLUMN)
-    macd.append(ema_12_ - ema_26_)
-    ema_12.append(ema_12_)
-    ema_26.append(ema_26_)
+macd = [0] * 26
+ema_12 = [0] * 26
+ema_26 = [0] * 26
 
 for day in range(26, totalCount):
     ema_12_ = calculate_ema(sourceDF, 12, day, DATA_COLUMN)
@@ -78,6 +68,12 @@ for day in range(26, totalCount):
     macd.append(ema_12_ - ema_26_)
     ema_12.append(ema_12_)
     ema_26.append(ema_26_)
+
+for day in range(0, 26):
+    ema = macd[26]
+    macd[day] = ema
+    ema_12[day] = ema
+    ema_26[day] = ema
 
 # Add EMA12, EMA26, MACD to sourceDF
 sourceDF['EMA_12'] = pd.Series(ema_12, index=sourceDF.index)
@@ -87,7 +83,7 @@ sourceDF['MACD'] = pd.Series(macd, index=sourceDF.index)
 # Calculating Signal
 signal = []
 for day in range(0, 9):
-    ema = calculate_ema(sourceDF, day, day, 'MACD')
+    ema = macd[26]
     signal.append(ema)
 for day in range(9, totalCount):
     ema = calculate_ema(sourceDF, 9, day, 'MACD')
@@ -96,7 +92,7 @@ for day in range(9, totalCount):
 sourceDF['SIGNAL'] = pd.Series(signal, index=sourceDF.index)
 
 # I have to cut off the first 20 intervals due to odd values
-sourceDF = sourceDF.iloc[20:, ]
+# sourceDF = sourceDF.iloc[20:, ]
 
 # And this is where we enter the plotly part.
 # Preparing and displaying the graph, MACD and SIGNAL * 100 for visibility against raw data
@@ -120,7 +116,7 @@ data_macd = [macd, signal]
 data_mixed = [macd, signal, raw]
 py.offline.plot(data_raw, filename='raw.html')
 py.offline.plot(data_macd, filename='macd.html')
-py.offline.plot(data_mixed, filename='mixed.html')
+# py.offline.plot(data_mixed, filename='mixed.html')
 
 # 50% of the project points is all above this comment.
 
