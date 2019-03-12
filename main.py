@@ -1,6 +1,7 @@
 import pandas as pd
 import plotly as py
 import plotly.graph_objs as go
+# import timeit # timeit.default_timer()
 
 # Constants for fine tuning
 MODE = 'OFFLINE'            # 'OFFLINE' or 'ONLINE'
@@ -35,7 +36,7 @@ def calculate_ema(df, n, today, column):
     """
     apow = 1
     topdiv = df.iloc[today][column]
-    botdiv = apow
+    botdiv = 1
     for i in range(1, n):
         # apow = pow(one_minus_alpha, i)
         apow = apow * one_minus_alpha  # Should be less calculation intensive than pow()
@@ -91,9 +92,6 @@ for day in range(9, totalCount):
 
 sourceDF['SIGNAL'] = pd.Series(signal, index=sourceDF.index)
 
-# I have to cut off the first 20 intervals due to odd values
-# sourceDF = sourceDF.iloc[20:, ]
-
 # And this is where we enter the plotly part.
 # Preparing and displaying the graph, MACD and SIGNAL * 100 for visibility against raw data
 raw = go.Scatter(
@@ -123,3 +121,7 @@ py.offline.plot(data_macd, filename='macd.html')
 # TODO: Figure out how to get buy/sell triggers and display them on the graph
 
 # TODO: Create a bot that will "trade" for the year using the triggers
+
+# TODO: Ustalić próbkowanie np. 12 każdego dnia
+# TODO: Dane z kilku lat żeby dostać 1000 próbek?
+
