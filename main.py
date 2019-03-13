@@ -11,7 +11,7 @@ There's a little problem - the FOREX data is missing from each FRIDAY 16:59 to S
 making it cause to miss a day if we were to pick a specific hour, like 12:00 - every SATURDAY would be missing.
 Solutions:
 - Picking 16:59 on some days and 17:00 on others
-    -- DONE by employing a tolerance selection with duplicate index removal
+    -- DONE by using nearest value selection with duplicate index removal
 - Give up trying to fetch per-day data and process the per-minute data - extreme amounts of values and processing time.
     -- This could be minimized by multiprocessing the calculations.
 """
@@ -33,19 +33,19 @@ def calculate_ema(data_frame: pd.DataFrame, n: int, today: int, column: str) -> 
     if not isinstance(data_frame, pd.DataFrame):
         raise TypeError
 
-    one_minus_alpha = 1 - (2 / (n - 1))
     """
     ema = (data[0] + data[i]*one_minus_alpha^i + ... + data[n]*one_minus_alpha^n)
     / (1 + one_minus_alpha^i + ... + one_minus_alpha^n)
     """
-    apow = 1
+    one_minus_alpha = 1 - (2 / (n - 1))
+    apow = 1.0
     topdiv = data_frame.iloc[today][column]
-    botdiv = 1
+    botdiv = 1.0
     for j in range(1, n):
         # apow = pow(one_minus_alpha, i)
         apow = apow * one_minus_alpha  # Should be less calculation intensive than pow()
-        topdiv = topdiv + data_frame.iloc[today - j][column] * apow
-        botdiv = botdiv + apow
+        topdiv += data_frame.iloc[today - j][column] * apow
+        botdiv += apow
 
     return topdiv / botdiv
 
@@ -57,8 +57,8 @@ def main():
 
     for i in range(2015, 2019):
         all_files.append(FILENAME + str(i) + '.csv')
-    for filename in all_files:
-        df = pd.read_csv(filename, sep=SEPARATOR, names=COLS)
+    for file in all_files:
+        df = pd.read_csv(file, sep=SEPARATOR, names=COLS)
         li.append(df)
 
     source_df: pd.DataFrame = pd.concat(li, ignore_index=True)
