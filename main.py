@@ -77,30 +77,30 @@ def main():
 
     # Calculating MACD, EMA_12, EMA_26 - this takes about 42% of the entire program's processing time
     # MACD = EMA_12 - EMA_26
-    macd: List[float] = [0] * total_count
+    macd: List[float] = [None] * total_count
 
     # TODO: Multithread
     for day in range(26, total_count):
         ema_12 = calculate_ema(formatted_df, 12, day, DATA_COLUMN)
         ema_26 = calculate_ema(formatted_df, 26, day, DATA_COLUMN)
-        macd.insert(day, ema_12 - ema_26)
+        macd[day] = ema_12 - ema_26
 
     for day in range(0, 26):
         ema = macd[26]
-        macd.insert(day, ema)
+        macd[day] = ema
 
     # Add MACD to formatted_df
     formatted_df['MACD'] = pd.Series(macd, index=formatted_df.index)
 
     # Calculating Signal
-    signal: List[float] = [0] * 9
+    signal: List[float] = [None] * total_count
     # TODO: Multithread
     for day in range(9, total_count):
         ema = calculate_ema(formatted_df, 9, day, 'MACD')
-        signal.insert(day, ema)
+        signal[day] = ema
     for day in range(0, 9):
         ema = signal[26]
-        signal.insert(day, ema)
+        signal[day] = ema
 
     # Add SIGNAL to formatted_df
     formatted_df['SIGNAL'] = pd.Series(signal, index=formatted_df.index)
