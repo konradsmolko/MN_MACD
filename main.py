@@ -41,7 +41,6 @@ Solutions:
 """
 
 # Constants for fine tuning
-MULTIPLIER = 1            # Multiplier for MACD and SIGNAL plots, for visibility reasons. Set to 1 to ignore.
 FILENAME = 'DAT_ASCII_USDPLN_M1_'
 COLS = ['DateTime Stamp', 'Bar OPEN Bid Quote', 'Bar LOW Bid Quote',
         'Bar HIGH Bid Quote', 'Bar CLOSE Bid Quote', 'Volume']
@@ -68,7 +67,7 @@ del li, all_files
 ts = source_df.index.min().replace(hour=17, minute=00)
 final_ts = source_df.index.max().replace(hour=17, minute=00)
 delta = pd.Timedelta('1d')
-indexes = pd.date_range(ts, final_ts)
+indexes = pd.date_range(ts, final_ts, freq='D')
 formatted_df = source_df.reindex(index=indexes, method='nearest').drop_duplicates()
 formatted_df.index = formatted_df.index.date
 total_count = formatted_df.index.size
@@ -104,26 +103,64 @@ for day in range(0, 9):
 # Add SIGNAL to formatted_df
 formatted_df['SIGNAL'] = pd.Series(signal, index=formatted_df.index)
 
+# TODO: Get x/y values for buy/sell markers
+previous = False
+markers_buy = []
+markers_sell = []
+for row in formatted_df.iterrows():
+    if row[1]['MACD'] > row[1]['SIGNAL'] and previous is False:
+        markers_buy.append(row[1][DATA_COLUMN])
+        markers_sell.append(None)
+        previous = True
+    elif row[1]['MACD'] < row[1]['SIGNAL'] and previous is True:
+        markers_sell.append(row[1][DATA_COLUMN])
+        markers_buy.append(None)
+        previous = False
+    else:
+        markers_buy.append(None)
+        markers_sell.append(None)
+
 # And this is where we enter the plotly part.
 # Preparing and displaying the graph, MACD and SIGNAL * 100 for visibility against raw data
-# TODO: Figure out how to get buy/sell triggers and display them on the graph
 raw = go.Scatter(
     name='Kurs',
     x=formatted_df.index,
     y=formatted_df[DATA_COLUMN],
     legendgroup='Kurs'
 )
+# Used to align the MACD and SIGNAL charts to the DATA chart for clarity
+avg = ((formatted_df.max() + formatted_df.min()) / 2)[DATA_COLUMN]
 macd = go.Scatter(
     name='MACD',
     x=formatted_df.index,
-    y=formatted_df['MACD'] * MULTIPLIER,
+    y=formatted_df['MACD'] + avg,
     legendgroup='MACD'
 )
 signal = go.Scatter(
     name='SIGNAL',
     x=formatted_df.index,
-    y=formatted_df['SIGNAL'] * MULTIPLIER,
+    y=formatted_df['SIGNAL'] + avg,
     legendgroup='SIGNAL'
+)
+buy = go.Scatter(
+    name='BUY',
+    x=formatted_df.index,
+    y=markers_buy,
+    mode='markers',
+    marker=dict(
+        size=20,
+        color='rgb(0,255,0)'
+    )
+)
+sell = go.Scatter(
+    name='SELL',
+    x=formatted_df.index,
+    y=markers_sell,
+    mode='markers',
+    marker=dict(
+        size=20,
+        color='rgb(255,0,0)'
+    )
 )
 layout = dict(
     title="Kurs dolara amerykańskiego do złotówki w latach 2015-2018",
@@ -132,12 +169,9 @@ layout = dict(
         title="Dzień"
     )
 )
-data_raw = dict(data=[raw], layout=layout)
-data_macd = dict(data=[macd, signal], layout=layout)
-data_mixed = dict(data=[macd, signal, raw], layout=layout)
-# py.offline.plot(data_raw, filename='raw.html')
-# py.offline.plot(data_macd, filename='macd.html')
-py.offline.plot(data_mixed, filename='mixed.html')
+# data = dict(data=[macd, signal, raw], layout=layout)
+data = dict(data=[macd, signal, raw, buy, sell], layout=layout)
+py.offline.plot(data, filename='graph.html')
 
 # 50% of the project points is above this comment.
 
