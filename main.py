@@ -3,12 +3,13 @@ from typing import List
 import pandas as pd
 import plotly as py
 import plotly.graph_objs as go
+
 # import multiprocessing as mp
 # import timeit  # timeit.default_timer()
 
 """
 There's a little problem - the FOREX data is missing from each FRIDAY 16:59 to SUNDAY 17:00 (yeah, don't ask me)
-making it cause to miss a day if we were to pick a specific hour, like 12:00 - every SATURDAY would be missing.
+making it miss a day if we were to pick a specific hour, like 12:00 - every SATURDAY would be missing.
 Solutions:
 - Picking 16:59 on some days and 17:00 on others
     -- DONE by using nearest value selection with duplicate index removal
@@ -105,7 +106,7 @@ def main():
     # Add SIGNAL to formatted_df
     formatted_df['SIGNAL'] = pd.Series(signal, index=formatted_df.index)
 
-    # TODO: Get x/y values for buy/sell markers
+    # Get x/y values for buy/sell markers
     previous = False
     markers_buy = []
     markers_sell = []
@@ -123,7 +124,7 @@ def main():
             markers_sell.append(None)
 
     # And this is where we enter the plotly part.
-    # Preparing and displaying the graph, MACD and SIGNAL * 100 for visibility against raw data
+    # Preparing and displaying the graph, MACD and SIGNAL + avg for visibility against raw data
     raw = go.Scatter(
         name='Kurs',
         x=formatted_df.index,
@@ -131,7 +132,8 @@ def main():
         legendgroup='Kurs'
     )
     # Used to align the MACD and SIGNAL charts to the DATA chart for clarity
-    avg = ((formatted_df.max() + formatted_df.min()) / 2)[DATA_COLUMN]
+    avg = 3.8
+    # avg = ((formatted_df.max() + formatted_df.min()) / 2)[DATA_COLUMN]
     macd = go.Scatter(
         name='MACD',
         x=formatted_df.index,
